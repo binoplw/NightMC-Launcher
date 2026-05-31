@@ -1,0 +1,10 @@
+{
+    "123456": {
+        "password": "938b8f734db97e2b96a899bd969b739eb864565edf54a620c575d5ec1d8a66e0",
+        "salt": "e9c974aac78c3301670df1b7a65df39d",
+        "created": "2026-05-28 23:35:56.165185",
+        "last_login": "2026-05-28 23:35:57.829469",
+        "token": "5973d10917a027f49e64e99f31a0ebd0cb7972dafd2998105ff4d3cef293650e",
+        "failed_attempts": 0
+    }
+}

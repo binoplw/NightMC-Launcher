@@ -1,0 +1,10 @@
+{
+    "123423": {
+        "password": "3e2ba9d015274da5880ce44fd62c9fcf8cd7e74983b42c986350a7183ee0c2a2",
+        "salt": "47f491a4235f94590ef6b332c080a725",
+        "created": "2026-05-28 23:30:39.021110",
+        "last_login": "2026-05-28 23:30:40.844794",
+        "token": "bff37b2890e6148dfcc36318a29b66090e705a6d95c2365d2cd4cae8742b0d39",
+        "failed_attempts": 0
+    }
+}
