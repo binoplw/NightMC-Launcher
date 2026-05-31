@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NightMC — Night лаунчер</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        :root {
+            --bg: #0a0a0f;
+            --card: rgba(20, 20, 35, 0.6);
+            --accent: #c084fc;
+            --accent-dark: #a855f7;
+            --text: #ffffff;
+            --text-muted: #a0a0b8;
+            --border: rgba(255, 255, 255, 0.08);
+            --accent-glow: rgba(192, 132, 252, 0.25);
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        body.light {
+            --bg: #f0f0f5;
+            --card: rgba(255, 255, 255, 0.7);
+            --text: #1a1a2e;
+            --text-muted: #666680;
+            --border: rgba(0, 0, 0, 0.08);
+        }
+
+        body.oled {
+            --bg: #000000;
+            --card: rgba(10, 10, 15, 0.85);
+            --accent: #00ff88;
+            --accent-dark: #00cc66;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            overflow: hidden;
+        }
+
+        /* ЗАГРУЗОЧНЫЙ ЭКРАН */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            transition: opacity 0.5s ease;
+        }
+        .loading-logo { font-size: 80px; margin-bottom: 30px; animation: loadingFloat 1.5s ease-in-out infinite; }
+        @keyframes loadingFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        .loading-text { font-size: 18px; font-weight: 700; background: linear-gradient(135deg, #fff, var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px; letter-spacing: 4px; }
+        .loading-bar { width: 300px; height: 3px; background: var(--border); border-radius: 3px; overflow: hidden; }
+        .loading-progress { width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-dark)); border-radius: 3px; transition: width 0.1s linear; }
+        .loading-percent { font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+
+        .bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 30%, rgba(192,132,252,0.1) 0%, transparent 50%);
+            z-index: 0;
+        }
+
+        .floating-logo {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 180px;
+            opacity: 0.03;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        .gradient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background: linear-gradient(135deg, #0a0a0f, #1a1a2e, #2a1a3e);
+            background-size: 300% 300%;
+            display: none;
+        }
+        .gradient-bg.animate { display: block; animation: gradientFlow 8s ease infinite; }
+        @keyframes gradientFlow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+        .custom-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; display: none; }
+        .custom-bg.active { display: block; }
+
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .header {
+            height: 48px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            background: rgba(10, 10, 15, 0.7);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            -webkit-app-region: drag;
+            position: relative;
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        .logo { display: flex; align-items: center; gap: 8px; }
+        .logo-icon { font-size: 20px; animation: spin 4s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .logo-text { font-size: 14px; font-weight: 700; background: linear-gradient(135deg, #fff, var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .logo-badge { font-size: 8px; background: rgba(192,132,252,0.2); padding: 2px 6px; border-radius: 20px; }
+        .window-controls { display: flex; gap: 8px; -webkit-app-region: no-drag; }
+        .window-controls button { width: 28px; height: 28px; background: rgba(255,255,255,0.05); border: none; color: var(--text-muted); border-radius: 6px; cursor: pointer; }
+        .window-controls button:hover { background: rgba(255,255,255,0.1); }
+        .window-controls button:last-child:hover { background: #e74c3c; color: white; }
+
+        /* ЛЕВАЯ ПАНЕЛЬ - ЗАПУСК */
+        .launch-panel {
+            position: absolute;
+            top: 50%;
+            left: 50px;
+            transform: translateY(-50%);
+            width: 340px;
+            background: var(--card);
+            backdrop-filter: blur(20px);
+            border-radius: 28px;
+            border: 1px solid var(--border);
+            padding: 24px;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        .title { text-align: center; margin-bottom: 20px; }
+        .title h1 { font-size: 20px; font-weight: 700; background: linear-gradient(135deg, #fff, var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .title p { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+        
+        .row { display: flex; gap: 12px; margin-bottom: 12px; }
+        .field { flex: 1; }
+        .field label { font-size: 9px; color: var(--text-muted); margin-bottom: 4px; display: block; text-transform: uppercase; letter-spacing: 0.5px; }
+        .field select { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 40px; padding: 8px 12px; color: var(--text); font-size: 11px; cursor: pointer; }
+        
+        /* КНОПКА PLAY */
+        .play-btn {
+            width: 100%;
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            border: none;
+            padding: 10px;
+            border-radius: 40px;
+            font-size: 13px;
+            font-weight: 700;
+            color: white;
+            cursor: pointer;
+            margin: 16px 0 12px 0;
+            transition: 0.2s;
+        }
+        .play-btn.loading {
+            background: linear-gradient(135deg, #2a2a4a, #1a1a3a);
+            cursor: wait;
+            opacity: 0.7;
+        }
+        .play-btn:hover { transform: scale(1.01); box-shadow: 0 0 15px var(--accent); }
+        
+        .profile { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid var(--border); }
+        .user { display: flex; align-items: center; gap: 10px; }
+        .avatar { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent-dark)); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; }
+        .user-info { font-size: 11px; }
+        .user-name { font-weight: 600; }
+        .user-status { font-size: 9px; color: var(--text-muted); }
+        .logout { background: transparent; border: 1px solid var(--border); padding: 4px 12px; border-radius: 20px; font-size: 9px; color: var(--text); cursor: pointer; }
+
+        .import-btn {
+            width: 100%;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 40px;
+            padding: 8px;
+            font-size: 11px;
+            color: var(--text-muted);
+            cursor: pointer;
+            margin-top: 8px;
+            transition: 0.2s;
+        }
+        .import-btn:hover {
+            background: var(--accent-glow);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* НОВОСТИ */
+        .news-panel {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            width: 320px;
+            background: var(--card);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            cursor: move;
+            box-shadow: var(--shadow);
+            opacity: 0;
+        }
+        .news-panel.dragging { opacity: 0.9; cursor: grabbing; }
+        .news-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            cursor: grab;
+        }
+        .news-header:active { cursor: grabbing; }
+        .news-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .news-controls { display: flex; gap: 8px; }
+        .news-controls button { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; }
+        .news-controls button:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+        .close-news { color: #ff6b6b; }
+        .close-news:hover { background: rgba(255,107,107,0.2); }
+        .news-list { overflow-y: auto; max-height: 320px; scroll-behavior: smooth; padding: 8px; }
+        .news-list::-webkit-scrollbar { width: 3px; }
+        .news-list::-webkit-scrollbar-track { background: var(--border); border-radius: 3px; }
+        .news-list::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+        .news-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            border: 1px solid transparent;
+        }
+        .news-item:hover { border-color: var(--accent); transform: translateX(-3px); background: var(--accent-glow); }
+        .news-item-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+        .news-item-date { font-size: 9px; color: var(--accent); margin-bottom: 6px; }
+        .news-item-preview { font-size: 10px; color: var(--text-muted); line-height: 1.3; }
+
+        /* ПРАВАЯ ПАНЕЛЬ */
+        .side-nav {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 52px;
+            background: var(--card);
+            backdrop-filter: blur(24px);
+            border-radius: 40px;
+            border: 1px solid var(--border);
+            z-index: 25;
+            padding: 16px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            transition: all 0.4s cubic-bezier(0.34, 1.2, 0.64, 1);
+            box-shadow: var(--shadow);
+            opacity: 0;
+        }
+
+        .side-nav:hover {
+            width: 180px;
+            background: rgba(30, 30, 55, 0.9);
+            backdrop-filter: blur(32px);
+        }
+        .side-nav:hover .nav-text { display: inline; }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 12px;
+            border-radius: 30px;
+            cursor: pointer;
+            color: var(--text-muted);
+            white-space: nowrap;
+            transition: all 0.25s ease;
+        }
+        .nav-item:hover {
+            background: rgba(192, 132, 252, 0.15);
+            color: var(--accent);
+            transform: translateX(-5px);
+        }
+        .nav-icon { font-size: 18px; width: 28px; text-align: center; }
+        .nav-text { font-size: 12px; font-weight: 500; display: none; }
+
+        /* ХОТБАР ЗАГРУЗКИ (РЕАЛЬНЫЙ) */
+        .loading-hotbar {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 460px;
+            background: var(--card);
+            backdrop-filter: blur(24px);
+            border-radius: 60px;
+            padding: 16px 24px;
+            border: 1px solid var(--border);
+            z-index: 1000;
+            transition: all 0.4s cubic-bezier(0.34, 1.2, 0.64, 1);
+            opacity: 0;
+            transform: translateX(-50%) translateY(30px);
+            pointer-events: none;
+            box-shadow: var(--shadow);
+        }
+        .loading-hotbar.active {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+            pointer-events: auto;
+        }
+        .loading-hotbar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .loading-hotbar-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .loading-hotbar-percent {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--text);
+            font-family: monospace;
+            background: rgba(0,0,0,0.3);
+            padding: 2px 10px;
+            border-radius: 30px;
+        }
+        .loading-hotbar-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 12px 0;
+        }
+        .loading-hotbar-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--accent-dark), #ff69b4);
+            background-size: 200% 100%;
+            border-radius: 6px;
+            transition: width 0.2s ease;
+            animation: shimmer 1.5s ease infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: 0% 0%; }
+            100% { background-position: 200% 0%; }
+        }
+        .loading-hotbar-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .loading-hotbar-action {
+            font-size: 10px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .loading-hotbar-spinner {
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-hotbar-stage {
+            font-size: 10px;
+            color: var(--accent);
+            font-family: monospace;
+            background: rgba(0,0,0,0.2);
+            padding: 2px 8px;
+            border-radius: 30px;
+        }
+        .cancel-download-btn {
+            background: rgba(231, 76, 60, 0.8);
+            border: none;
+            color: white;
+            font-size: 10px;
+            padding: 4px 12px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .cancel-download-btn:hover { background: #e74c3c; }
+
+        /* ОВЕРЛЕЙ ВКЛАДОК */
+        .overlay {
+            position: fixed;
+            top: 48px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(5, 5, 10, 0.92);
+            backdrop-filter: blur(32px);
+            z-index: 100;
+            display: none;
+            padding: 24px;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        .overlay.active {
+            display: block;
+            animation: overlayFadeIn 0.4s forwards;
+        }
+        .overlay.closing {
+            animation: overlayFadeOut 0.4s forwards;
+        }
+        @keyframes overlayFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes overlayFadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+        .overlay-container {
+            background: var(--card);
+            backdrop-filter: blur(20px);
+            border-radius: 28px;
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 28px;
+            position: relative;
+            border: 1px solid var(--border);
+            opacity: 0;
+            transform: scale(0.98);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .overlay.active .overlay-container {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .overlay.closing .overlay-container {
+            opacity: 0;
+            transform: scale(0.98);
+        }
+
+        .close-overlay {
+            position: absolute;
+            top: 20px;
+            right: 24px;
+            background: rgba(255,255,255,0.05);
+            border: none;
+            color: var(--text);
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .close-overlay:hover { background: var(--accent); transform: rotate(90deg); }
+
+        .tab-page { display: none; animation: pageFade 0.2s; }
+        .tab-page.active { display: block; }
+        @keyframes pageFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .section-card {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+        .section-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+
+        .grid-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 12px;
+        }
+        .card-item {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 16px;
+            padding: 14px;
+            border: 1px solid var(--border);
+            transition: 0.2s;
+        }
+        .card-item:hover { transform: translateY(-2px); border-color: var(--accent); }
+        .empty { text-align: center; padding: 30px; color: var(--text-muted); grid-column: 1/-1; font-size: 12px; }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            border: none; padding: 6px 16px; border-radius: 30px; font-weight: 600; color: white; cursor: pointer; font-size: 11px;
+        }
+        .btn-outline {
+            background: transparent; border: 1px solid var(--border); padding: 6px 16px; border-radius: 30px; color: var(--text); cursor: pointer; font-size: 11px;
+        }
+
+        .switch { position: relative; display: inline-block; width: 38px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.2); border-radius: 20px;
+        }
+        .slider:before {
+            position: absolute; content: ""; height: 14px; width: 14px;
+            left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s;
+        }
+        input:checked + .slider { background: linear-gradient(135deg, var(--accent), var(--accent-dark)); }
+        input:checked + .slider:before { transform: translateX(18px); }
+
+        .search-row { display: flex; gap: 10px; margin-bottom: 14px; }
+        .search-row input { flex: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 30px; padding: 8px 14px; color: var(--text); font-size: 12px; }
+        .filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+        .filter-chip {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 10px;
+            cursor: pointer;
+            color: var(--text-muted);
+        }
+        .filter-chip.active { background: var(--accent); color: white; }
+
+        .console-log {
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 10px;
+            padding: 12px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 16px;
+        }
+        .console-log div { color: #7ee787; padding: 3px 0; }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(20px);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--card);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 24px;
+            width: 300px;
+            text-align: center;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(10px);
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-size: 9px;
+            color: var(--text-muted);
+            z-index: 30;
+            opacity: 0;
+        }
+        .footer a { color: var(--text-muted); text-decoration: none; }
+
+        .notify {
+            position: fixed;
+            bottom: 50px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .notify-item {
+            background: var(--card);
+            backdrop-filter: blur(20px);
+            border-left: 2px solid var(--accent);
+            padding: 6px 14px;
+            margin-top: 6px;
+            border-radius: 20px;
+            font-size: 11px;
+            animation: slideIn 0.2s;
+        }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="gradient-bg" id="gradientBg"></div>
+    <div class="custom-bg" id="customBg"></div>
+    <div class="floating-logo">🌙 NightMC 🌙</div>
+    <canvas id="particlesCanvas"></canvas>
+
+    <!-- ЗАГРУЗОЧНЫЙ ЭКРАН -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-logo">🌙</div>
+        <div class="loading-text">NIGHTMC</div>
+        <div class="loading-bar"><div class="loading-progress" id="loadingProgress"></div></div>
+        <div class="loading-percent" id="loadingPercent">0%</div>
+    </div>
+
+    <div class="header">
+        <div class="logo"><div class="logo-icon">🌙</div><div class="logo-text">NightMC</div><div class="logo-badge">ELITE</div></div>
+        <div class="window-controls"><button id="minimizeBtn">—</button><button id="closeBtn">✕</button></div>
+    </div>
+
+    <!-- ЛЕВАЯ ПАНЕЛЬ -->
+    <div class="launch-panel">
+        <div class="title"><h1>NightMC</h1><p>запуск игры</p></div>
+        <div class="row">
+            <div class="field"><label>Версия</label><select id="versionSelect">
+                <option>1.20.4</option><option>1.20.1</option><option>1.19.4</option><option>1.19.2</option>
+                <option>1.18.2</option><option>1.17.1</option><option>1.16.5</option>
+            </select></div>
+            <div class="field"><label>Загрузчик</label><select id="loaderSelect">
+                <option>Vanilla</option><option>Fabric</option><option>Forge</option>
+            </select></div>
+        </div>
+        <button class="play-btn" id="playBtn">▶ ИГРАТЬ</button>
+        <button class="import-btn" id="importBtn">📥 Импортировать из Mojang</button>
+        <div class="profile">
+            <div class="user"><div class="avatar" id="userAvatar">🌍</div><div class="user-info"><div class="user-name" id="userName">Гость</div><div class="user-status" id="userStatus">Не авторизован</div></div></div>
+            <button class="logout" id="logoutBtn" style="display:none;">Выйти</button>
+        </div>
+    </div>
+
+    <!-- ХОТБАР ЗАГРУЗКИ (РЕАЛЬНЫЙ) -->
+    <div class="loading-hotbar" id="loadingHotbar">
+        <div class="loading-hotbar-header">
+            <div class="loading-hotbar-title"><span>🚀</span> ЗАГРУЗКА MINECRAFT</div>
+            <div class="loading-hotbar-percent" id="loadingPercentText">0%</div>
+        </div>
+        <div class="loading-hotbar-bar"><div class="loading-hotbar-fill" id="loadingFill"></div></div>
+        <div class="loading-hotbar-details">
+            <div class="loading-hotbar-action">
+                <div class="loading-hotbar-spinner"></div>
+                <span id="loadingStatusText">Подготовка...</span>
+            </div>
+            <div class="loading-hotbar-stage" id="loadingStageText">Этап 1/6</div>
+            <button class="cancel-download-btn" id="cancelDownloadBtn">Отмена</button>
+        </div>
+    </div>
+
+    <!-- НОВОСТИ -->
+    <div class="news-panel" id="newsPanel">
+        <div class="news-header" id="newsHeader"><div class="news-title">📰 Последние новости</div><div class="news-controls"><button id="minimizeNewsBtn">−</button><button id="closeNewsBtn" class="close-news">✕</button></div></div>
+        <div class="news-list" id="newsList"></div>
+    </div>
+
+    <!-- ПРАВАЯ ПАНЕЛЬ -->
+    <div class="side-nav" id="sideNav">
+        <div class="nav-item" data-tab="home"><span class="nav-icon">⌂</span><span class="nav-text">Главная</span></div>
+        <div class="nav-item" data-tab="addons"><span class="nav-icon">◫</span><span class="nav-text">Аддоны</span></div>
+        <div class="nav-item" data-tab="mods" id="modsNavItem"><span class="nav-icon">◉</span><span class="nav-text">Моды</span></div>
+        <div class="nav-item" data-tab="servers"><span class="nav-icon">🌐</span><span class="nav-text">Сервера</span></div>
+        <div class="nav-item" data-tab="settings"><span class="nav-icon">⚙</span><span class="nav-text">Настройки</span></div>
+        <div class="nav-item" data-tab="dev"><span class="nav-icon">⎔</span><span class="nav-text">Консоль</span></div>
+    </div>
+
+    <!-- ОВЕРЛЕЙ ВКЛАДОК -->
+    <div class="overlay" id="overlay">
+        <div class="overlay-container">
+            <button class="close-overlay" id="closeOverlay">✕</button>
+            <div id="addonsPage" class="tab-page">
+                <div class="section-card"><h3>📦 Установленные аддоны</h3><div id="installedAddonsList"><div class="empty">Нет установленных аддонов</div></div></div>
+                <div class="section-card"><h3>⬇ Доступные аддоны</h3><div class="grid-cards" id="addonsGrid"></div></div>
+            </div>
+            <div id="modsPage" class="tab-page">
+                <div class="section-card"><h3>🔍 Modrinth</h3><div class="search-row"><input type="text" id="modSearch" placeholder="Поиск модов..."><button class="btn-primary" id="searchModsBtn">Найти</button></div><div class="filter-row" id="filterRow"></div><div id="modsLibrary" class="grid-cards"><div class="empty">Установите аддон Modrinth Mods</div></div><div class="filter-row" id="modsPagination"></div></div>
+                <div class="section-card"><div style="display:flex; justify-content:space-between;"><h3>📁 Мои сборки</h3><button class="btn-primary" id="createPackBtn">+ Новая</button></div><div id="packsList" class="grid-cards"></div></div>
+            </div>
+            <div id="serversPage" class="tab-page"><div class="section-card"><h3>🌐 Сервера</h3><div class="grid-cards" id="serversGrid"></div></div></div>
+            <div id="settingsPage" class="tab-page">
+                <div class="section-card"><h3>🎨 Темы</h3><div id="themesGrid" style="display:flex; gap:8px; flex-wrap:wrap;"></div></div>
+                <div class="section-card" id="bgSettings" style="display:none;"><h3>🖼️ Custom Background</h3><div class="setting-row"><span>Фон</span><button class="btn-primary" id="uploadBgBtn">Загрузить</button> <button class="btn-outline" id="resetBgBtn">Сбросить</button></div></div>
+                <div class="section-card" id="gradientSettings" style="display:none;"><h3>🌈 Gradient Wallpaper</h3><div class="setting-row"><span>Включить</span><label class="switch"><input type="checkbox" id="gradientToggle" checked><span class="slider"></span></label></div><div class="setting-row"><span>Скорость</span><input type="range" id="gradientSpeed" min="3" max="15" step="1" value="8"> <span id="gradientSpeedVal">8с</span></div></div>
+                <div class="section-card" id="langSettings" style="display:none;"><h3>🌐 Languages Pack</h3><div class="setting-row"><span>Язык</span><select id="languageSelect"><option value="ru">Русский</option><option value="en">English</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="es">Español</option></select></div></div>
+                <div class="section-card" id="animSettings" style="display:none;"><h3>✨ Animation Hotbar</h3><div class="setting-row"><span>Скорость анимации</span><input type="range" id="animSpeed" min="0.2" max="1.2" step="0.05" value="0.5"> <span id="animSpeedVal">0.5с</span></div></div>
+                <div class="section-card" id="perfSettings" style="display:none;"><h3>⚡ Performance Boost</h3><button class="btn-primary" id="clearCacheBtn">Очистить кэш</button> <button class="btn-outline" id="optimizeBtn">Оптимизировать</button></div>
+                <div class="section-card"><h3>⚙ Система</h3><div class="setting-row"><span>RAM (MB)</span><input type="range" id="ramSys" min="512" max="16384" step="256" value="2048"> <span id="ramSysVal">2048</span></div><div class="setting-row"><span>JVM аргументы</span><input type="text" id="jvmArgs" value="-Xmx2G -XX:+UseG1GC"></div></div>
+                <div class="section-card"><h3>✨ Частицы</h3><div class="setting-row"><span>Включить</span><label class="switch"><input type="checkbox" id="particlesToggle" checked><span class="slider"></span></label></div><div class="setting-row"><span>Количество</span><input type="range" id="particlesCount" min="10" max="100" value="40"> <span id="particlesCountVal">40</span></div></div>
+                <button class="btn-primary" id="saveSettingsBtn">Сохранить</button>
+            </div>
+            <div id="devPage" class="tab-page"><div class="section-card"><h3>⎔ Консоль</h3><div id="consoleLogs" class="console-log"><div>[NightMC] Лаунчер запущен</div></div><button class="btn-outline" id="clearConsoleBtn">Очистить</button></div></div>
+        </div>
+    </div>
+
+    <div class="modal" id="authModal"><div class="modal-content"><div style="font-size:18px; font-weight:700; margin-bottom:16px;">Вход</div><button class="btn-primary" data-auth="microsoft">Microsoft</button><button class="btn-primary" data-auth="mojang">Mojang</button><button class="btn-primary" data-auth="offline">Offline</button><div id="offlineArea" style="display:none;"><input type="text" id="offlineNick" placeholder="Никнейм"><button id="offlineLoginBtn" class="btn-primary">Войти</button></div><button class="btn-outline" id="closeAuthModal">Закрыть</button></div></div>
+
+    <div class="footer"><a href="#" id="privacyLink">Политика конфиденциальности</a> • NightMC 2025</div>
+    <div class="notify" id="notify"></div>
+
+    <script>
+        // ЗАГРУЗКА
+        let loadProgress = 0;
+        const loadingScreen = document.getElementById('loadingScreen');
+        const loadingProgress = document.getElementById('loadingProgress');
+        const loadingPercentEl = document.getElementById('loadingPercent');
+        const header = document.querySelector('.header');
+        const launchPanel = document.querySelector('.launch-panel');
+        const newsPanelEl = document.querySelector('.news-panel');
+        const sideNav = document.querySelector('.side-nav');
+        const footer = document.querySelector('.footer');
+
+        const loadInterval = setInterval(() => {
+            loadProgress += 2;
+            if (loadingProgress) loadingProgress.style.width = loadProgress + '%';
+            if (loadingPercentEl) loadingPercentEl.innerText = loadProgress + '%';
+            if (loadProgress >= 100) {
+                clearInterval(loadInterval);
+                if (loadingScreen) {
+                    loadingScreen.style.opacity = '0';
+                    setTimeout(() => {
+                        loadingScreen.style.display = 'none';
+                        header.style.opacity = '1';
+                        launchPanel.style.opacity = '1';
+                        newsPanelEl.style.opacity = '1';
+                        sideNav.style.opacity = '1';
+                        footer.style.opacity = '1';
+                    }, 500);
+                }
+            }
+        }, 50);
+
+        // ЧАСТИЦЫ
+        const canvas = document.getElementById('particlesCanvas');
+        let ctx = canvas.getContext('2d');
+        let particles = [];
+        let particleCount = 40;
+        let particlesActive = true;
+        
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        function createParticles() {
+            particles = [];
+            for (let i = 0; i < particleCount; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: Math.random() * 3 + 1,
+                    speedX: (Math.random() - 0.5) * 0.5,
+                    speedY: (Math.random() - 0.5) * 0.5,
+                    color: `rgba(192,132,252,${Math.random() * 0.5 + 0.2})`
+                });
+            }
+        }
+        function animateParticles() {
+            if (!ctx || !particlesActive) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let p of particles) {
+                p.x += p.speedX;
+                p.y += p.speedY;
+                if (p.x < 0) p.x = canvas.width;
+                if (p.x > canvas.width) p.x = 0;
+                if (p.y < 0) p.y = canvas.height;
+                if (p.y > canvas.height) p.y = 0;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = p.color; ctx.fill();
+            }
+            requestAnimationFrame(animateParticles);
+        }
+        window.addEventListener('resize', () => { resizeCanvas(); createParticles(); });
+        resizeCanvas(); createParticles(); animateParticles();
+
+        function notify(msg) {
+            const c = document.getElementById('notify');
+            const e = document.createElement('div');
+            e.className = 'notify-item';
+            e.textContent = msg;
+            c.appendChild(e);
+            setTimeout(() => e.remove(), 2500);
+        }
+        
+        function log(msg) {
+            const el = document.getElementById('consoleLogs');
+            if (el) {
+                const e = document.createElement('div');
+                e.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                el.appendChild(e);
+                el.scrollTop = el.scrollHeight;
+            }
+            console.log(msg);
+        }
+
+        // УПРАВЛЕНИЕ ОКНОМ
+        document.getElementById('minimizeBtn')?.addEventListener('click', () => window.nightMC?.minimize?.());
+        document.getElementById('closeBtn')?.addEventListener('click', () => window.nightMC?.close?.());
+        document.getElementById('clearConsoleBtn')?.addEventListener('click', () => {
+            document.getElementById('consoleLogs').innerHTML = '<div>[NightMC] Консоль очищена</div>';
+        });
+
+        // ХОТБАР ЗАГРУЗКИ (РЕАЛЬНЫЙ)
+        const loadingHotbar = document.getElementById('loadingHotbar');
+        const loadingFill = document.getElementById('loadingFill');
+        const loadingPercentText = document.getElementById('loadingPercentText');
+        const loadingStatusText = document.getElementById('loadingStatusText');
+        const loadingStageText = document.getElementById('loadingStageText');
+        const cancelBtn = document.getElementById('cancelDownloadBtn');
+        const playButton = document.getElementById('playBtn');
+        
+        let currentDownloadCanceled = false;
+        
+        function updateHotbar(progress, status, stage) {
+            if (!loadingHotbar.classList.contains('active')) loadingHotbar.classList.add('active');
+            loadingFill.style.width = `${progress}%`;
+            loadingPercentText.textContent = `${Math.floor(progress)}%`;
+            loadingStatusText.textContent = status;
+            if (stage) loadingStageText.textContent = stage;
+            if (progress >= 100) {
+                setTimeout(() => loadingHotbar.classList.remove('active'), 2000);
+            }
+        }
+
+        // ========== РЕАЛЬНЫЙ ЗАПУСК MINECRAFT ==========
+        if (playButton) {
+            playButton.addEventListener('click', async () => {
+                if (playButton.classList.contains('loading')) {
+                    return;
+                }
+                
+                const version = document.getElementById('versionSelect')?.value || '1.20.4';
+                const nickname = document.getElementById('nicknameInput')?.value.trim() || 'NightMC_Player';
+                let ram = 2048;
+                
+                const savedRam = localStorage.getItem('nightmc_ram');
+                if (savedRam) ram = parseInt(savedRam);
+                
+                log(`=== ЗАПУСК MINECRAFT ===`);
+                log(`Версия: ${version}`);
+                log(`Пользователь: ${nickname}`);
+                log(`RAM: ${ram}MB`);
+                
+                // Показываем хотбар
+                loadingHotbar.classList.add('active');
+                loadingFill.style.width = '0%';
+                loadingPercentText.textContent = '0%';
+                loadingStatusText.textContent = 'Подготовка к запуску...';
+                loadingStageText.textContent = 'Поиск Java...';
+                
+                playButton.classList.add('loading');
+                playButton.textContent = '⏳ ЗАГРУЗКА...';
+                
+                try {
+                    // Проверяем наличие nightMC
+                    if (!window.nightMC) {
+                        throw new Error('nightMC не инициализирован! Перезапустите лаунчер.');
+                    }
+                    
+                    if (!window.nightMC.launchMinecraft) {
+                        throw new Error('Функция launchMinecraft не найдена! Проверьте main.js');
+                    }
+                    
+                    // Подписываемся на прогресс
+                    if (window.nightMC.onLaunchProgress) {
+                        window.nightMC.onLaunchProgress((data) => {
+                            log(`Прогресс: ${data.stage} - ${data.progress}% - ${data.message}`);
+                            if (data.stage === 'version') {
+                                updateHotbar(5, data.message, 'Загрузка информации...');
+                            } else if (data.stage === 'client') {
+                                updateHotbar(data.progress, data.message, 'Скачивание клиента...');
+                            } else if (data.stage === 'libraries') {
+                                updateHotbar(20 + data.progress * 0.5, data.message, 'Скачивание библиотек...');
+                            } else if (data.stage === 'launch') {
+                                updateHotbar(100, data.message, 'Запуск!');
+                            } else if (data.stage === 'error') {
+                                throw new Error(data.message);
+                            }
+                        });
+                    }
+                    
+                    // Реальный вызов запуска
+                    const result = await window.nightMC.launchMinecraft({
+                        version: version,
+                        username: nickname,
+                        ram: ram
+                    });
+                    
+                    if (result && result.success) {
+                        updateHotbar(100, 'Minecraft запущен!', 'Готово!');
+                        log('Minecraft успешно запущен!');
+                        notify('Minecraft запущен!');
+                        setTimeout(() => {
+                            loadingHotbar.classList.remove('active');
+                            playButton.classList.remove('loading');
+                            playButton.textContent = '▶ ИГРАТЬ';
+                        }, 3000);
+                    } else {
+                        throw new Error(result?.error || 'Неизвестная ошибка');
+                    }
+                    
+                } catch (err) {
+                    console.error('Ошибка запуска:', err);
+                    updateHotbar(0, `Ошибка: ${err.message}`, 'Ошибка');
+                    notify(`Ошибка: ${err.message}`);
+                    playButton.classList.remove('loading');
+                    playButton.textContent = '▶ ИГРАТЬ';
+                    setTimeout(() => {
+                        loadingHotbar.classList.remove('active');
+                    }, 4000);
+                }
+            });
+        }
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                if (window.nightMC && window.nightMC.cancelDownload) {
+                    window.nightMC.cancelDownload();
+                }
+                loadingHotbar.classList.remove('active');
+                playButton.classList.remove('loading');
+                playButton.textContent = '▶ ИГРАТЬ';
+                notify('Загрузка отменена');
+            });
+        }
+
+        // ИМПОРТ ИЗ TLAUNCHER
+        document.getElementById('importBtn')?.addEventListener('click', async () => {
+            notify('Импорт из Mojang...');
+            if (window.nightMC && window.nightMC.importFromTLauncher) {
+                const result = await window.nightMC.importFromTLauncher();
+                if (result.success) {
+                    notify(`Импорт завершён! Импортировано ${result.imported || 0} версий`);
+                } else {
+                    notify(`Ошибка: ${result.error}`);
+                }
+            } else {
+                notify('Функция импорта временно недоступна');
+            }
+        });
+
+        // НОВОСТИ (ПЕРЕТАСКИВАНИЕ)
+        const newsPanelMovable = document.getElementById('newsPanel');
+        const newsHeaderEl = document.getElementById('newsHeader');
+        let isDragging = false;
+        let dragStartX, dragStartY;
+        let panelStartX, panelStartY;
+
+        if (newsHeaderEl) {
+            newsHeaderEl.addEventListener('mousedown', (e) => {
+                if (e.target.closest('.news-controls')) return;
+                isDragging = true;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+                panelStartX = newsPanelMovable.offsetLeft;
+                panelStartY = newsPanelMovable.offsetTop;
+                newsPanelMovable.style.cursor = 'grabbing';
+                newsPanelMovable.classList.add('dragging');
+                e.preventDefault();
+            });
+        }
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - dragStartX;
+            const dy = e.clientY - dragStartY;
+            let newLeft = panelStartX + dx;
+            let newTop = panelStartY + dy;
+            newLeft = Math.max(10, Math.min(window.innerWidth - newsPanelMovable.offsetWidth - 10, newLeft));
+            newTop = Math.max(60, Math.min(window.innerHeight - newsPanelMovable.offsetHeight - 30, newTop));
+            newsPanelMovable.style.left = newLeft + 'px';
+            newsPanelMovable.style.top = newTop + 'px';
+            newsPanelMovable.style.right = 'auto';
+            newsPanelMovable.style.bottom = 'auto';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                newsPanelMovable.style.cursor = '';
+                newsPanelMovable.classList.remove('dragging');
+                const pos = { left: newsPanelMovable.style.left, top: newsPanelMovable.style.top };
+                localStorage.setItem('newsPanelPos', JSON.stringify(pos));
+            }
+        });
+
+        const savedPos = localStorage.getItem('newsPanelPos');
+        if (savedPos) {
+            try { const pos = JSON.parse(savedPos); if (pos.left && pos.top) { newsPanelMovable.style.left = pos.left; newsPanelMovable.style.top = pos.top; newsPanelMovable.style.right = 'auto'; newsPanelMovable.style.bottom = 'auto'; } } catch(e) {}
+        }
+
+        let isMinimized = false;
+        const newsListEl = document.getElementById('newsList');
+        document.getElementById('minimizeNewsBtn')?.addEventListener('click', () => {
+            if (isMinimized) { newsListEl.style.display = 'block'; newsPanelMovable.style.width = '320px'; document.getElementById('minimizeNewsBtn').textContent = '−'; }
+            else { newsListEl.style.display = 'none'; newsPanelMovable.style.width = 'auto'; document.getElementById('minimizeNewsBtn').textContent = '+'; }
+            isMinimized = !isMinimized;
+        });
+        document.getElementById('closeNewsBtn')?.addEventListener('click', () => { newsPanelMovable.style.display = 'none'; localStorage.setItem('newsPanelClosed', 'true'); });
+        if (localStorage.getItem('newsPanelClosed') === 'true') {
+            newsPanelMovable.style.display = 'none';
+            const restoreBtn = document.createElement('div');
+            restoreBtn.innerHTML = '📰';
+            restoreBtn.style.cssText = 'position:fixed; bottom:60px; right:20px; width:40px; height:40px; background:var(--card); backdrop-filter:blur(20px); border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:15; border:1px solid var(--border);';
+            restoreBtn.onclick = () => { newsPanelMovable.style.display = 'flex'; restoreBtn.remove(); localStorage.removeItem('newsPanelClosed'); };
+            document.body.appendChild(restoreBtn);
+        }
+
+        const newsData = [
+            { title: "NightMC v5.0 - Полный редизайн!", date: "15 марта 2025", content: "<p>Мы полностью переработали лаунчер! Новый дизайн, плавные анимации, 6 новых аддонов.</p>" },
+            { title: "Добавлен аддон Modrinth", date: "10 марта 2025", content: "<p>Теперь вы можете устанавливать моды прямо из лаунчера!</p>" },
+            { title: "Новая система сборок", date: "5 марта 2025", content: "<p>Создавайте свои сборки модов и делитесь ими.</p>" },
+            { title: "Анимации и эффекты", date: "1 марта 2025", content: "<p>Лаунчер стал ещё красивее! Плавные анимации, эффект капельки и огня.</p>" }
+        ];
+        function renderNews() {
+            const container = document.getElementById('newsList');
+            if (!container) return;
+            container.innerHTML = '';
+            newsData.forEach((news) => {
+                const newsItem = document.createElement('div');
+                newsItem.className = 'news-item';
+                newsItem.innerHTML = `<div class="news-item-title">${news.title}</div><div class="news-item-date">📅 ${news.date}</div><div class="news-item-preview">${news.content.replace(/<[^>]*>/g, '').substring(0, 80)}...</div>`;
+                newsItem.onclick = () => {
+                    const modal = document.getElementById('newsModal');
+                    const modalContent = document.getElementById('newsModalContent');
+                    modalContent.innerHTML = `<div class="news-detail-title">${news.title}</div><div class="news-detail-date">📅 ${news.date}</div><div class="news-detail-content">${news.content}</div><button class="btn-outline" id="closeNewsModal" style="margin-top:20px; width:100%;">Закрыть</button>`;
+                    modal.classList.add('active');
+                    document.getElementById('closeNewsModal').onclick = () => modal.classList.remove('active');
+                };
+                container.appendChild(newsItem);
+            });
+        }
+        renderNews();
+        document.getElementById('newsModal')?.addEventListener('click', (e) => { if (e.target === document.getElementById('newsModal')) document.getElementById('newsModal').classList.remove('active'); });
+
+        // ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК
+        const overlay = document.getElementById('overlay');
+        const navItems = document.querySelectorAll('.nav-item');
+        const pages = document.querySelectorAll('.tab-page');
+        let isClosing = false;
+
+        function closeOverlay() {
+            if (isClosing) return;
+            isClosing = true;
+            overlay.classList.add('closing');
+            setTimeout(() => { overlay.classList.remove('active', 'closing'); isClosing = false; }, 400);
+        }
+
+        function openPage(pageId) {
+            overlay.classList.remove('closing');
+            overlay.classList.add('active');
+            pages.forEach(p => p.classList.remove('active'));
+            const activePage = document.getElementById(pageId + 'Page');
+            if (activePage) activePage.classList.add('active');
+            log(`Открыта страница: ${pageId}`);
+        }
+
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                const tabId = item.getAttribute('data-tab');
+                if (tabId === 'home') closeOverlay();
+                else openPage(tabId);
+            });
+        });
+        document.getElementById('closeOverlay')?.addEventListener('click', closeOverlay);
+
+        // АВТОРИЗАЦИЯ
+        let currentUser = JSON.parse(localStorage.getItem('nightmc_user') || '{"name":"Гость","type":null}');
+        function updateUI() {
+            document.getElementById('userName').innerText = currentUser.name;
+            document.getElementById('userStatus').innerText = currentUser.type ? `${currentUser.type === 'offline' ? 'Offline' : currentUser.type} аккаунт` : 'Не авторизован';
+            document.getElementById('logoutBtn').style.display = currentUser.type ? 'inline-block' : 'none';
+            const avatar = document.getElementById('userAvatar');
+            if (currentUser.type === 'microsoft') avatar.innerHTML = '🪟';
+            else if (currentUser.type === 'mojang') avatar.innerHTML = '⛏️';
+            else avatar.innerHTML = '🌍';
+        }
+        const authModal = document.getElementById('authModal');
+        document.getElementById('userAvatar')?.addEventListener('click', () => authModal.classList.add('active'));
+        document.getElementById('closeAuthModal')?.addEventListener('click', () => authModal.classList.remove('active'));
+        document.querySelectorAll('[data-auth]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const type = btn.getAttribute('data-auth');
+                document.getElementById('offlineArea').style.display = 'none';
+                if (type === 'offline') document.getElementById('offlineArea').style.display = 'block';
+                else {
+                    window.nightMC?.openExternal(type === 'microsoft' ? 'https://login.live.com' : 'https://www.minecraft.net/msaprofile');
+                    currentUser = { name: `${type === 'microsoft' ? 'MicrosoftPlayer' : 'MojangPlayer'}`, type: type };
+                    localStorage.setItem('nightmc_user', JSON.stringify(currentUser));
+                    updateUI();
+                    authModal.classList.remove('active');
+                    notify(`Вход через ${type}`);
+                }
+            });
+        });
+        document.getElementById('offlineLoginBtn')?.addEventListener('click', () => {
+            const nick = document.getElementById('offlineNick').value.trim();
+            if (nick) {
+                currentUser = { name: nick, type: 'offline' };
+                localStorage.setItem('nightmc_user', JSON.stringify(currentUser));
+                updateUI();
+                authModal.classList.remove('active');
+                notify(`Вход как ${nick}`);
+            }
+        });
+        document.getElementById('logoutBtn')?.addEventListener('click', () => {
+            currentUser = { name: 'Гость', type: null };
+            localStorage.removeItem('nightmc_user');
+            updateUI();
+            notify('Вы вышли');
+        });
+        updateUI();
+
+        // ТЕМЫ
+        const themes = { dark: { name: 'Тёмная', class: '' }, light: { name: 'Светлая', class: 'light' }, oled: { name: 'OLED', class: 'oled' } };
+        function renderThemes() {
+            const c = document.getElementById('themesGrid'); if (!c) return;
+            c.innerHTML = '';
+            Object.entries(themes).forEach(([key, theme]) => {
+                const btn = document.createElement('button'); btn.className = 'btn-outline'; btn.style.margin = '4px'; btn.textContent = theme.name;
+                btn.onclick = () => { document.body.className = theme.class; localStorage.setItem('nightmc_theme', key); notify(`Тема ${theme.name}`); };
+                c.appendChild(btn);
+            });
+            const saved = localStorage.getItem('nightmc_theme');
+            if (saved && themes[saved]) document.body.className = themes[saved].class;
+        }
+        renderThemes();
+
+        // АДДОНЫ
+        let installedAddons = JSON.parse(localStorage.getItem('nightmc_addons') || '[]');
+        const allAddons = [
+            { id: 'modrinth', name: 'Modrinth Mods', desc: 'Поиск и установка модов', icon: '◉', version: '1.0.0', hasSettings: false },
+            { id: 'custombg', name: 'Custom Background', desc: 'Свой фон (фото/видео)', icon: '🖼️', version: '1.0.0', hasSettings: true, settingsId: 'bgSettings' },
+            { id: 'gradient', name: 'Gradient Wallpaper', desc: 'Анимированный градиент', icon: '🌈', version: '1.0.0', hasSettings: true, settingsId: 'gradientSettings' },
+            { id: 'languages', name: 'Languages Pack', desc: 'Мультиязычный интерфейс', icon: '🌐', version: '1.0.0', hasSettings: true, settingsId: 'langSettings' },
+            { id: 'animation', name: 'Animation Hotbar', desc: 'Плавная анимация', icon: '✨', version: '1.0.0', hasSettings: true, settingsId: 'animSettings' },
+            { id: 'performance', name: 'Performance Boost', desc: 'Оптимизация', icon: '⚡', version: '1.0.0', hasSettings: true, settingsId: 'perfSettings' }
+        ];
+        function saveAddons() { localStorage.setItem('nightmc_addons', JSON.stringify(installedAddons)); }
+        function isAddonInstalled(id) { return installedAddons.some(a => a.id === id); }
+        function renderAddonsList() {
+            const grid = document.getElementById('addonsGrid'); if (!grid) return;
+            grid.innerHTML = '';
+            allAddons.forEach(addon => {
+                const isInstalled = isAddonInstalled(addon.id);
+                const card = document.createElement('div'); card.className = 'card-item';
+                card.innerHTML = `<div><h4>${addon.icon} ${addon.name}</h4><p>${addon.desc}</p><small>v${addon.version}</small></div><button class="btn-primary install-addon" data-id="${addon.id}" style="margin-top:10px;">${isInstalled ? 'Удалить' : 'Установить'}</button>`;
+                card.querySelector('.install-addon').onclick = () => {
+                    if (isInstalled) installedAddons = installedAddons.filter(a => a.id !== addon.id);
+                    else installedAddons.push({ id: addon.id, name: addon.name });
+                    saveAddons();
+                    renderAddonsList();
+                    renderInstalledAddons();
+                    notify(isInstalled ? `Аддон ${addon.name} удалён` : `Аддон ${addon.name} установлен`);
+                };
+                grid.appendChild(card);
+            });
+        }
+        function renderInstalledAddons() {
+            const container = document.getElementById('installedAddonsList'); if (!container) return;
+            if (installedAddons.length === 0) { container.innerHTML = '<div class="empty">Нет установленных аддонов</div>'; return; }
+            container.innerHTML = '';
+            installedAddons.forEach(addon => {
+                const div = document.createElement('div'); div.className = 'card-item'; div.style.display = 'flex'; div.style.justifyContent = 'space-between'; div.style.alignItems = 'center';
+                div.innerHTML = `<div><strong>${addon.name}</strong></div><button class="btn-outline remove-addon" data-id="${addon.id}">Удалить</button>`;
+                div.querySelector('.remove-addon').onclick = () => {
+                    installedAddons = installedAddons.filter(a => a.id !== addon.id);
+                    saveAddons();
+                    renderAddonsList();
+                    renderInstalledAddons();
+                    notify(`Аддон удалён`);
+                };
+                container.appendChild(div);
+            });
+        }
+        renderAddonsList();
+        renderInstalledAddons();
+
+        // НАСТРОЙКИ
+        const ramSlider = document.getElementById('ramSys');
+        const ramVal = document.getElementById('ramSysVal');
+        if (ramSlider) ramSlider.addEventListener('input', () => ramVal.innerText = ramSlider.value);
+        
+        document.getElementById('saveSettingsBtn')?.addEventListener('click', () => {
+            particlesActive = document.getElementById('particlesToggle').checked;
+            particleCount = parseInt(document.getElementById('particlesCount').value);
+            if (particlesActive) { createParticles(); animateParticles(); }
+            else { ctx?.clearRect(0, 0, canvas.width, canvas.height); }
+            localStorage.setItem('nightmc_ram', ramSlider?.value || '2048');
+            notify('Настройки сохранены');
+        });
+        
+        document.getElementById('particlesCount')?.addEventListener('input', (e) => {
+            document.getElementById('particlesCountVal').innerText = e.target.value;
+        });
+        
+        document.getElementById('uploadBgBtn')?.addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*,video/*';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const url = URL.createObjectURL(file);
+                const bgDiv = document.getElementById('customBg');
+                bgDiv.innerHTML = '';
+                if (file.type.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.src = url;
+                    img.style.width = '100%';
+                    img.style.height = '100%';
+                    img.style.objectFit = 'cover';
+                    bgDiv.appendChild(img);
+                } else {
+                    const vid = document.createElement('video');
+                    vid.src = url;
+                    vid.autoplay = true;
+                    vid.loop = true;
+                    vid.muted = true;
+                    vid.style.width = '100%';
+                    vid.style.height = '100%';
+                    vid.style.objectFit = 'cover';
+                    bgDiv.appendChild(vid);
+                    vid.play();
+                }
+                bgDiv.classList.add('active');
+                localStorage.setItem('nightmc_custom_bg', url);
+                notify('Фон изменён');
+            };
+            input.click();
+        });
+        
+        document.getElementById('resetBgBtn')?.addEventListener('click', () => {
+            document.getElementById('customBg').innerHTML = '';
+            document.getElementById('customBg').classList.remove('active');
+            localStorage.removeItem('nightmc_custom_bg');
+            notify('Фон сброшен');
+        });
+        
+        document.getElementById('privacyLink')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            notify('NightMC не собирает личные данные');
+        });
+
+        // ПРОВЕРКА ИНИЦИАЛИЗАЦИИ
+        if (!window.nightMC) {
+            console.error('nightMC не доступен!');
+            notify('Ошибка: лаунчер не инициализирован');
+        } else {
+            console.log('nightMC доступен, функции:', Object.keys(window.nightMC));
+        }
+
+        log('NightMC запущен');
+        notify('Добро пожаловать в NightMC!');
+    </script>
+</body>
+</html>
